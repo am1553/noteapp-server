@@ -1,9 +1,32 @@
-import { Response } from "express";
+import { Request, Response } from "express";
 import pool from "../db";
-import { AuthenticatedRequest, Note, Tag } from "../types";
+import { Tag, User } from "../types";
 
-export const createNote = async (req: AuthenticatedRequest, res: Response) => {
-  const user = req.user;
+const createTag = async (name: string, userID: string) => {
+  return await pool.query(
+    "INSERT INTO tags (name, user_id) VALUES ($1, $2) RETURNING *",
+    [name, userID]
+  );
+};
+
+const createNoteTagJoin = async (noteID: string, tagID: string) => {
+  await pool.query("INSERT INTO note_tags (note_id, tag_id) VALUES ($1, $2)", [
+    noteID,
+    tagID,
+  ]);
+};
+
+export const createNote = async (
+  req: Request<
+    {},
+    {},
+    { title: string; description: string; tags: string[] },
+    {}
+  >,
+  res: Response
+) => {
+  const user = req.locals.user as Omit<User, "id"> & Required<Pick<User, "id">>;
+
   const { title, description, tags } = req.body;
   try {
     const noteQuery = await pool.query(
@@ -11,16 +34,12 @@ export const createNote = async (req: AuthenticatedRequest, res: Response) => {
       [title, description, user.id]
     );
     const tagsQuery = await Promise.all(
-      tags.map(async (tag: Tag) => {
-        const tagQuery = await pool.query(
-          "INSERT INTO tags (name, user_id) VALUES ($1, $2) RETURNING *",
-          [tag.name.toLowerCase(), user.id]
-        );
-        await pool.query(
-          "INSERT INTO note_tags (note_id, tag_id) VALUES ($1, $2)",
-          [noteQuery.rows[0].id, tagQuery.rows[0].id]
-        );
-        return tagQuery.rows[0];
+      tags.map(async (tagStr: string) => {
+        const tagQuery = await createTag(tagStr, user.id!);
+        const tag: Omit<Tag, "id"> & Required<Pick<Tag, "id">> =
+          tagQuery.rows[0];
+        createNoteTagJoin(tag.id, user.id);
+        return tag;
       })
     );
 
@@ -31,7 +50,7 @@ export const createNote = async (req: AuthenticatedRequest, res: Response) => {
   }
 };
 
-export const getNote = async (req: AuthenticatedRequest, res: Response) => {
+export const getNote = async (req: Request<{ id: string }>, res: Response) => {
   const { id } = req.params;
   try {
     const noteQuery = await pool.query(
@@ -44,7 +63,7 @@ export const getNote = async (req: AuthenticatedRequest, res: Response) => {
       [noteQuery.rows[0].id]
     );
 
-    const tags = await Promise.all(
+    const tags: Tag[] = await Promise.all(
       noteTags.rows.map(async (noteTag) => {
         console.log(noteTag);
         const tagQuery = await pool.query("SELECT * FROM tags WHERE id = $1", [
@@ -63,15 +82,24 @@ export const getNote = async (req: AuthenticatedRequest, res: Response) => {
   }
 };
 
-export const getNotes = async (req: AuthenticatedRequest, res: Response) => {
-  const { user, query } = req;
+export const getNotes = async (
+  req: Request<
+    {},
+    {},
+    {},
+    { isArchived?: boolean; tagStr?: string; value?: string }
+  >,
+  res: Response
+) => {
+  const { user } = req.locals;
+  const { isArchived, tagStr, value } = req.query;
 
   try {
     let notesDbQuery =
       "SELECT id, title, description, is_archived, updated_at FROM notes WHERE user_id = $1";
     const notesDbParams = [user.id];
 
-    if (query.isArchived) {
+    if (isArchived) {
       notesDbQuery += " AND is_archived = $2";
       notesDbParams.push("true");
     }
@@ -98,11 +126,11 @@ export const getNotes = async (req: AuthenticatedRequest, res: Response) => {
       })
     );
 
-    if (query.tag) {
+    if (tagStr) {
       const filterbyTag = data.filter((note) => {
         const noteTags = note.tags;
         const tagNames = noteTags.map((tag: Tag) => tag.name);
-        if (tagNames.includes(query.tag)) {
+        if (tagNames.includes(tagStr)) {
           return note;
         }
       });
@@ -110,16 +138,14 @@ export const getNotes = async (req: AuthenticatedRequest, res: Response) => {
       return res.status(200).json(filterbyTag);
     }
 
-    if (query.searchAll) {
-      const searchValue = query.value as string;
-
+    if (value) {
       const filteredData = data.filter((note) => {
         const noteTags = note.tags;
         const tagNames = noteTags.map((tag: Tag) => tag.name);
         if (
-          note.title.toLowerCase().includes(searchValue.toLowerCase()) ||
-          note.description.toLowerCase().includes(searchValue.toLowerCase()) ||
-          tagNames.includes(searchValue)
+          note.title.toLowerCase().includes(value.toLowerCase()) ||
+          note.description.toLowerCase().includes(value.toLowerCase()) ||
+          tagNames.includes(value)
         ) {
           return note;
         }
@@ -134,23 +160,26 @@ export const getNotes = async (req: AuthenticatedRequest, res: Response) => {
   }
 };
 
-const createNoteTagJoin = async (noteID: string, tagID: string) => {
-  const noteTagsQuery = await pool.query(
-    "INSERT INTO note_tags (note_id, tag_id) VALUES ($1, $2)",
-    [noteID, tagID]
-  );
-};
-
-const createNoteWithTags = async (noteData: Note, tagsData: Tag[]) => {};
-
-export const updateNote = async (req: AuthenticatedRequest, res: Response) => {
+export const updateNote = async (
+  req: Request<
+    { id: string },
+    {},
+    {
+      title: string;
+      description: string;
+      isArchived: boolean;
+      tags: Tag[];
+    }
+  >,
+  res: Response
+) => {
   const { id } = req.params;
-  const { title, description, is_archived, tags } = req.body;
+  const { title, description, isArchived, tags } = req.body;
 
   try {
     const noteQuery = await pool.query(
       "UPDATE notes SET title = $1, description = $2, is_archived = $3, WHERE id = $4",
-      [title, description, is_archived, id]
+      [title, description, isArchived, id]
     );
     const noteTags = await pool.query(
       "SELECT * FROM note_tags WHERE note_id = $1",

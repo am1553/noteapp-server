@@ -1,8 +1,7 @@
-import { Response } from "express";
+import { Response, Request } from "express";
 import pool from "../db";
-import { AuthenticatedRequest } from "../types";
-export const getTags = async (req: AuthenticatedRequest, res: Response) => {
-  const user = req.user;
+export const getTags = async (req: Request, res: Response) => {
+  const user = req.locals.user;
   try {
     const tagsQuery = await pool.query(
       "SELECT name, id FROM tags WHERE user_id = $1",
@@ -14,8 +13,8 @@ export const getTags = async (req: AuthenticatedRequest, res: Response) => {
   }
 };
 
-export const getTag = async (req: AuthenticatedRequest, res: Response) => {
-  const user = req.user;
+export const getTag = async (req: Request, res: Response) => {
+  const user = req.locals.user;
   const { id } = req.params;
   try {
     const tagQuery = await pool.query("SELECT * FROM tags WHERE id = $1", [id]);

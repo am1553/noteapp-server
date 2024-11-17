@@ -55,3 +55,19 @@ declare global {
     }
   }
 }
+
+export interface Note {
+  id?: string;
+  title: string;
+  description?: string;
+  isArchived: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  userID?: string;
+}
+
+export interface Tag {
+  id?: string;
+  name: string;
+  userID?: string;
+}
