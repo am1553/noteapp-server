@@ -6,33 +6,22 @@ import {
   createToken,
   hashPassword,
 } from "../modules/auth";
-import { AcessRefreshToken, User } from "../types";
-
-type CreateResponseSuccess = {
-  token: AcessRefreshToken;
-  user: Omit<User, "firstName" | "lastName"> &
-    Required<Pick<User, "firstName" | "lastName">>;
-};
-
-type CreateResponseError = { message: string };
-type CreateResponse = Response<
-  CreateResponseSuccess | CreateResponseError,
-  any
->;
+import {
+  AccessRefreshToken,
+  CreateUserReq,
+  CreateUserRes,
+  SignInReq,
+  SignInRes,
+  User,
+} from "../types";
 
 export const userExists = (email: string) => {
   return pool.query("SELECT * FROM users WHERE (email) = $1", [email]);
 };
 
 export const createUser = async (
-  req: Request<
-    {},
-    {},
-    Omit<User, "firstName" | "lastName" | "email" | "password"> &
-      Required<Pick<User, "firstName" | "lastName" | "password" | "email">>,
-    {}
-  >,
-  res: CreateResponse,
+  req: CreateUserReq,
+  res: CreateUserRes,
   next: NextFunction
 ): Promise<void> => {
   const { email, password, firstName, lastName } = req.body;
@@ -52,19 +41,22 @@ export const createUser = async (
       userQuery.rows[0];
     const token: string = createToken(user);
     const refreshToken: string = createRefreshToken(user);
-    res.status(201).json({
+
+    const data = {
       token: { access: token, refresh: refreshToken },
       user: user,
-    });
+    };
+    res.status(201).json(data);
   } catch (error) {
     next(error);
   }
 };
 
 export const signIn = async (
-  req: Request<{}, {}, { email: string; password: string }, {}>,
-  res: Response
-) => {
+  req: SignInReq,
+  res: SignInRes,
+  next: NextFunction
+): Promise<void> => {
   const { email, password } = req.body;
   try {
     const userQuery = await pool.query(
@@ -73,7 +65,7 @@ export const signIn = async (
     );
 
     if (userQuery.rows.length < 1) {
-      return res
+      res
         .status(401)
         .json({ message: "No user found with the email address." });
     }
@@ -85,29 +77,27 @@ export const signIn = async (
 
     const isValidPassword = await comparePasswords(password, user.password);
     if (!isValidPassword) {
-      return res.status(401).json({ message: "Invalid password" });
+      res.status(401).json({ message: "Invalid password" });
     }
 
-    const token = createToken(user);
-    const refreshToken = createRefreshToken(user);
+    const token: string = createToken(user);
+    const refreshToken: string = createRefreshToken(user);
 
-    const data: { token: Token; user: User; noteID: string | null } = {
+    const data: {
+      token: AccessRefreshToken;
+      user: Omit<User, "firstName" | "lastName" | "id"> &
+        Required<Pick<User, "firstName" | "lastName" | "email" | "id">>;
+    } = {
       token: { access: token, refresh: refreshToken },
       user: {
         id: user.id,
         email: user.email,
-        first_name: user.first_name,
-        last_name: user.last_name,
+        firstName: user.first_name,
+        lastName: user.last_name,
       },
-      noteID: null,
     };
-
-    if (noteQuery.rows.length > 0) {
-      data.noteID = noteQuery.rows[0].id;
-    }
-
-    return res.status(200).json(data);
+    res.status(200).json(data);
   } catch (error) {
-    return res.status(500).json(error);
+    next(error);
   }
 };

@@ -1,7 +1,7 @@
 import jwt, { JwtPayload } from "jsonwebtoken";
 import bcrypt from "bcrypt";
-import { Response } from "express";
-import { AuthenticatedRequest, User } from "../types";
+import { Response, Request, NextFunction } from "express";
+import { User } from "../types";
 export const comparePasswords = (
   password: string,
   hashedPassword: string
@@ -29,45 +29,56 @@ export const createRefreshToken = (user: User): string => {
   return token;
 };
 
-const verifyToken = (token: string): string | JwtPayload => {
+const verifyToken = (token: string): { user: User } => {
   const jwtSecret: string = process.env.JWT_SECRET as string;
-  return jwt.verify(token, jwtSecret);
+  return jwt.verify(token, jwtSecret) as { user: User };
 };
 
-export const issueNewToken = (req: AuthenticatedRequest, res: Response) => {
+export const issueNewToken = (
+  req: Request<{}, {}, { refreshToken: string }>,
+  res: Response<{ access: string } | { message: string }>,
+  next: NextFunction
+) => {
   const refreshToken = req.body.refreshToken;
 
-  if (!refreshToken)
-    res.status(401).json({ message: "Refresh token is required." });
+  try {
+    if (!refreshToken)
+      res.status(401).json({ message: "Refresh token is required." });
 
-  const isValid = !!verifyToken(refreshToken);
-  if (!isValid) res.status(403).json({ message: "Invalid refresh token." });
+    const isValid = !!verifyToken(refreshToken);
+    if (!isValid) res.status(403).json({ message: "Invalid refresh token." });
 
-  const verifiedToken = verifyToken(refreshToken);
-  const newToken = createToken(verifiedToken.user);
-  return res.status(200).json({ access: newToken });
+    const verifiedToken = verifyToken(refreshToken);
+    const newToken = createToken(verifiedToken.user);
+    res.status(200).json({ access: newToken });
+  } catch (error) {
+    next(error);
+  }
 };
 
-export const protect = (req, res, next) => {
-  const bearer = req.headers.authorization;
-
-  if (!bearer) {
-    res.status(401);
-    return res.json({ message: "Not Authorized." });
-  }
-
-  const [, token] = bearer.split(" ");
-  if (!token) {
-    res.status(401);
-    return res.json({ message: "Invalid Token." });
-  }
+export const protect = (
+  req: Request<{}, {}, {}, {}, { locals: { user: User } }>,
+  res: Response,
+  next: NextFunction
+): void => {
+  const bearer: null | undefined | string = req.headers.authorization;
 
   try {
-    const payload = verifyToken(token);
-    const { user } = payload;
-    req.user = user;
-    return next();
+    if (!bearer) {
+      res.status(401).json({ message: "Not Authorized." });
+    } else {
+      const [, token] = bearer.split(" ");
+      if (!token) {
+        res.status(401);
+        res.json({ message: "Invalid Token." });
+      }
+
+      const payload = verifyToken(token);
+      const { user } = payload;
+      req.locals = { user };
+      next();
+    }
   } catch (error) {
-    return res.status(401).json({ message: "Failed to verify token." });
+    res.status(401).json({ message: "Failed to verify token." });
   }
 };
