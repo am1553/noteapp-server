@@ -51,6 +51,7 @@ declare global {
     interface Request {
       locals: {
         user: User;
+        data?: any;
       };
     }
   }

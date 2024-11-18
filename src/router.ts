@@ -1,23 +1,47 @@
-import { Router } from "express";
-import { createNote, getNote, getNotes, updateNote } from "./handlers/notes.js";
-import { getTag, getTags } from "./handlers/tags.js";
-import {createUser} from "./handlers/users";
+import { Request, Response, Router } from "express";
+import {
+  createNote,
+  createNoteTagJoin,
+  createTags,
+  deleteNote,
+  getNote,
+  getNotes,
+  removeDuplicateTags,
+  updateNote,
+} from "./handlers/notes";
+import { getTag, getTags } from "./handlers/tags";
+import { createUser, signIn } from "./handlers/users";
+import { issueNewToken } from "./modules/auth";
 
-const router = Router();
+const appRouter: Router = Router();
+const authRouter: Router = Router();
 
-
-router.post("/notes", createNote);
-router.get("/notes/:id", getNote);
-router.get("/notes", getNotes);
-router.put("/notes/:id", updateNote);
-router.get("/tags", getTags);
-router.get("/tags/:id", getTag);
-
-router.get("/heartbeat", (req, res) => {
-  try {
-    return res.status(200).json({ access: true });
-  } catch (error) {
-    return res.status(401).json({ message: "Token expired." });
+appRouter.post(
+  "/notes",
+  removeDuplicateTags,
+  createTags,
+  createNote,
+  createNoteTagJoin
+);
+appRouter.get("/notes/:id", getNote);
+appRouter.get("/notes", getNotes);
+appRouter.put("/notes/:id", updateNote);
+appRouter.delete("/notes/:id", deleteNote);
+appRouter.get("/tags", getTags);
+appRouter.get("/tags/:id", getTag);
+appRouter.get(
+  "/health",
+  (req: Request<{}, {}, {}, {}>, res: Response<{}, { message: string }>) => {
+    try {
+      res.status(200).json({ access: true });
+    } catch (error) {
+      res.status(401).json({ message: "Token expired." });
+    }
   }
-});
-export default router;
+);
+
+authRouter.post("/users", createUser);
+authRouter.post("/sign-in", signIn);
+authRouter.post("/refresh-token", issueNewToken);
+
+export { appRouter, authRouter };

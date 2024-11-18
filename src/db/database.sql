@@ -38,3 +38,18 @@ CREATE TABLE note_tags (
     tag_id UUID REFERENCES tags(id) ON DELETE CASCADE,
     PRIMARY KEY (note_id, tag_id)
 );
+
+CREATE OR REPLACE FUNCTION cleanup_unused_tags()
+RETURNS TRIGGER AS $$
+BEGIN
+    DELETE FROM tags
+    WHERE id NOT IN (SELECT DISTINCT tag_id FROM note_tags);
+
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER cleanup_tags_after_note_delete
+AFTER DELETE ON notes
+FOR EACH ROW
+EXECUTE FUNCTION cleanup_unused_tags();

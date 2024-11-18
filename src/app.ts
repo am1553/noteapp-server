@@ -1,12 +1,11 @@
-import express, {Express, NextFunction, Request, Response} from "express";
+import express, { Express, NextFunction, Request, Response } from "express";
 import cors from "cors";
 import pool from "./db/index";
 import morgan from "morgan";
 import { protect } from "./modules/auth";
-import router from "./router";
-import authRouter from "./auth-router";
+import { appRouter, authRouter } from "./router";
 
-const app : Express = express();
+const app: Express = express();
 const corsOptions = {
   origin: ["http://localhost:3000", "http://localhost:5173"],
   method: ["GET", "POST", "OPTIONS", "PUT", "PATCH", "DELETE"],
@@ -35,8 +34,7 @@ const testDatabaseConnection = async (
 
 app.use(testDatabaseConnection);
 
-
-app.use("/auth", authRouter)
-app.use("/api/v1", protect, router);
+app.use("/auth", authRouter);
+app.use("/api/v1", protect, appRouter);
 
 export default app;
