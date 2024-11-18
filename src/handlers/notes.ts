@@ -37,17 +37,18 @@ export const createTags = async (
 ) => {
   const user = req.locals.user;
   const { tags } = req.body;
-  console.log("=========================================================");
-  console.log(tags);
   try {
-    const newTagsQuery = await Promise.all(
+    await Promise.all(
       tags.map(async (tag: Tag) => {
         // if tag exists then return null
-        const doesTagExist = await tagExists(tag.name.toLowerCase(), user.id!);
+        const doesTagExist = await tagExists(
+          tag.name.trim().toLowerCase(),
+          user.id!
+        );
         if (doesTagExist) return null;
         const newTag = await pool.query(
           "INSERT INTO tags (name, user_id) VALUES ($1, $2) RETURNING *",
-          [tag.name.toLowerCase(), user.id]
+          [tag.name.trim().toLowerCase(), user.id]
         );
         const createdTag = newTag.rows[0];
         return createdTag;
@@ -55,7 +56,7 @@ export const createTags = async (
     );
     next();
   } catch (error) {
-    console.log(error);
+    res.status(500).json(error);
   }
 };
 
@@ -146,12 +147,15 @@ export const getNotes = async (
     {},
     {},
     {},
-    { isArchived?: boolean; tagStr?: string; value?: string }
+    {
+      isArchived?: boolean;
+      searchValue?: string;
+    }
   >,
   res: Response
-) => {
+): Promise<void> => {
   const { user } = req.locals;
-  const { isArchived, tagStr, value } = req.query;
+  const { isArchived, searchValue } = req.query;
 
   try {
     let notesDbQuery =
@@ -185,32 +189,21 @@ export const getNotes = async (
       })
     );
 
-    if (tagStr) {
-      const filterbyTag = data.filter((note) => {
-        const noteTags = note.tags;
-        const tagNames = noteTags.map((tag: Tag) => tag.name);
-        if (tagNames.includes(tagStr)) {
-          return note;
-        }
-      });
-
-      res.status(200).json(filterbyTag);
-    }
-
-    if (value) {
+    if (searchValue) {
       const filteredData = data.filter((note) => {
         const noteTags = note.tags;
         const tagNames = noteTags.map((tag: Tag) => tag.name);
+
         if (
-          note.title.toLowerCase().includes(value.toLowerCase()) ||
-          note.description.toLowerCase().includes(value.toLowerCase()) ||
-          tagNames.includes(value)
+          note.title.toLowerCase().includes(searchValue.toLowerCase()) ||
+          note.description.toLowerCase().includes(searchValue.toLowerCase()) ||
+          tagNames.includes(searchValue)
         ) {
           return note;
         }
       });
-
       res.status(200).json(filteredData);
+      return;
     }
 
     res.status(200).json(data);

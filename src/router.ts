@@ -2,14 +2,17 @@ import { Request, Response, Router } from "express";
 import {
   createNote,
   createNoteTagJoin,
-  createTags,
   deleteNote,
   getNote,
   getNotes,
-  removeDuplicateTags,
   updateNote,
 } from "./handlers/notes";
-import { getTag, getTags } from "./handlers/tags";
+import {
+  createTags,
+  getTag,
+  getTags,
+  removeDuplicateTags,
+} from "./handlers/tags";
 import { createUser, signIn } from "./handlers/users";
 import { issueNewToken } from "./modules/auth";
 
