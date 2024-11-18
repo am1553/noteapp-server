@@ -65,8 +65,27 @@ export const createNoteTagJoin = async (
   res: Response<(Note & { tags: Tag[] }) | any, {}>
 ) => {
   const data = req.locals.data;
+  const user = req.locals.user;
+
   try {
-    data.tags?.map(async (tag: Tag) => {
+    const existingNoteTags = await pool.query(
+      "SELECT tag_id FROM note_tags WHERE note_id = $1",
+      [data.id]
+    );
+    const tagIDs = existingNoteTags.rows.map((row) => row.tag_id);
+    const existingTags = await Promise.all(
+      tagIDs.map(async (tagID) => {
+        const data = await pool.query("SELECT * FROM tags WHERE id = $1", [
+          tagID,
+        ]);
+        return data.rows[0];
+      })
+    );
+    const existingTagNames = existingTags.map((tag) => tag.name);
+    const newJoins = data.tags.filter(
+      (tag: Tag) => !existingTagNames.includes(tag.name)
+    );
+    newJoins.map(async (tag: Tag) => {
       const noteID = data.id;
       await pool.query(
         "INSERT INTO note_tags (note_id, tag_id) VALUES($1, $2)",
@@ -74,7 +93,9 @@ export const createNoteTagJoin = async (
       );
     });
     res.status(200).json(data);
+    return;
   } catch (error) {
+    console.log(error);
     res.status(500).json(error);
   }
 };
@@ -148,23 +169,28 @@ export const getNotes = async (
     {},
     {},
     {
-      isArchived?: boolean;
+      isArchived?: string;
       searchValue?: string;
+      tagName?: string;
     }
   >,
   res: Response
 ): Promise<void> => {
   const { user } = req.locals;
-  const { isArchived, searchValue } = req.query;
+  const { isArchived, searchValue, tagName } = req.query;
 
   try {
     let notesDbQuery =
       "SELECT id, title, description, is_archived, updated_at FROM notes WHERE user_id = $1";
     const notesDbParams = [user.id];
 
-    if (isArchived) {
+    if (isArchived === "true") {
       notesDbQuery += " AND is_archived = $2";
       notesDbParams.push("true");
+    } else if (isArchived === "false") {
+      notesDbQuery += " AND is_archived = $2";
+      notesDbParams.push("false");
+    } else {
     }
 
     const notes = await pool.query(notesDbQuery, notesDbParams);
@@ -185,18 +211,36 @@ export const getNotes = async (
             return tagQuery.rows[0];
           })
         );
-        return { ...note, tags };
+        const noteData: Note = {
+          id: note.id,
+          title: note.title,
+          description: note.description,
+          isArchived: note.is_archived,
+          updatedAt: note.updated_at,
+        };
+        return { ...noteData, tags };
       })
     );
+
+    if (tagName && tagName.trim() !== "") {
+      const filteredData = data.filter((note) => {
+        const noteTags = note.tags;
+        const tagNames = noteTags.map((tag: Tag) => tag.name);
+        if (tagNames.includes(tagName)) {
+          return note;
+        }
+      });
+      res.status(200).json(filteredData);
+      return;
+    }
 
     if (searchValue) {
       const filteredData = data.filter((note) => {
         const noteTags = note.tags;
         const tagNames = noteTags.map((tag: Tag) => tag.name);
-
         if (
           note.title.toLowerCase().includes(searchValue.toLowerCase()) ||
-          note.description.toLowerCase().includes(searchValue.toLowerCase()) ||
+          note.description?.toLowerCase().includes(searchValue.toLowerCase()) ||
           tagNames.includes(searchValue)
         ) {
           return note;
@@ -213,58 +257,43 @@ export const getNotes = async (
 };
 
 export const updateNote = async (
-  req: Request<
-    { id: string },
-    {},
-    {
-      title: string;
-      description: string;
-      isArchived: boolean;
-      tags: Tag[];
-    }
-  >,
-  res: Response
+  req: Request,
+  res: Response,
+  next: NextFunction
 ) => {
   const { id } = req.params;
   const { title, description, isArchived, tags } = req.body;
-
   try {
     const noteQuery = await pool.query(
-      "UPDATE notes SET title = $1, description = $2, is_archived = $3, WHERE id = $4",
+      "UPDATE notes SET title = $1, description = $2, is_archived = $3 WHERE id = $4 RETURNING *",
       [title, description, isArchived, id]
     );
-    const noteTags = await pool.query(
-      "SELECT * FROM note_tags WHERE note_id = $1",
-      [id]
-    );
-
-    const newTags = tags.filter((tag: Tag) => {
-      if (!tag.id) return tag;
-    });
-    const newTagsQuery: Tag[] = await Promise.all(
-      newTags.map(async (tag: Tag) => {
-        const newTagQuery = await pool.query(
-          "INSERT INTO tags (name) VALUES ($1) RETURNING *",
-          [tag]
+    const tagsQuery = await Promise.all(
+      tags.map(async (tag: Tag) => {
+        const tagQuery = await pool.query(
+          "SELECT * FROM tags WHERE name = $1",
+          [tag.name]
         );
-        return newTagQuery.rows[0];
+        return tagQuery.rows[0];
       })
     );
+    const note = noteQuery.rows[0];
 
-    const newNoteTags = await Promise.all(
-      newTagsQuery.map(async (tag: Tag) => {
-        const noteTagQuery = await pool.query(
-          "INSERT INTO note_tags (note_id, tag_id) VALUES ($1, $2) RETURNING *",
-          [id, tag.id]
-        );
-
-        return noteTagQuery.rows[0];
-      })
-    );
-
-    const tagsQuery = Promise.all(tags.map((tag: Tag) => {}));
+    const noteData = {
+      id: note.id,
+      title: note.title,
+      description: note.description,
+      isArchived: note.is_archived,
+      updatedAt: note.updated_at,
+      tags: tagsQuery,
+    };
+    req.locals.data = noteData;
+    next();
+    return;
   } catch (error) {
     console.error(error);
+    res.status(500).json(error);
+    return;
   }
 };
 
@@ -290,7 +319,14 @@ export const deleteNote = async (
           return tags.rows[0];
         })
       );
-      return { ...note, tags: tagsQuery };
+      return {
+        id: note.id,
+        title: note.title,
+        description: note.description,
+        isArchived: note.is_archived,
+        updatedAt: note.updated_at,
+        tags: tagsQuery,
+      };
     });
     res.status(200).json({ message: "Deleted Successfully." });
   } catch (error) {

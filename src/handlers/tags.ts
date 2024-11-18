@@ -2,6 +2,21 @@ import { Response, Request, NextFunction } from "express";
 import pool from "../db";
 import { Note, Tag } from "../types";
 
+export const validateTagData = async (
+  req: Request<{}, {}, Note & { tags: Tag[] }, {}>,
+  res: Response,
+  next: NextFunction
+) => {
+  const { tags } = req.body;
+  const formattedTags = tags.map((tag) => ({
+    ...tag,
+    name: tag.name.toLowerCase().trim(),
+  }));
+
+  req.body.tags = formattedTags;
+  next();
+};
+
 export const getTags = async (req: Request, res: Response) => {
   const user = req.locals.user;
   try {

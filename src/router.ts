@@ -12,6 +12,7 @@ import {
   getTag,
   getTags,
   removeDuplicateTags,
+  validateTagData,
 } from "./handlers/tags";
 import { createUser, signIn } from "./handlers/users";
 import { issueNewToken } from "./modules/auth";
@@ -21,6 +22,7 @@ const authRouter: Router = Router();
 
 appRouter.post(
   "/notes",
+  validateTagData,
   removeDuplicateTags,
   createTags,
   createNote,
@@ -28,7 +30,14 @@ appRouter.post(
 );
 appRouter.get("/notes/:id", getNote);
 appRouter.get("/notes", getNotes);
-appRouter.put("/notes/:id", updateNote);
+appRouter.put(
+  "/notes/:id",
+  validateTagData,
+  removeDuplicateTags,
+  createTags,
+  updateNote,
+  createNoteTagJoin
+);
 appRouter.delete("/notes/:id", deleteNote);
 appRouter.get("/tags", getTags);
 appRouter.get("/tags/:id", getTag);
