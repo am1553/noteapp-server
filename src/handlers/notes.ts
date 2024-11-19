@@ -65,7 +65,6 @@ export const createNoteTagJoin = async (
   res: Response<(Note & { tags: Tag[] }) | any, {}>
 ) => {
   const data = req.locals.data;
-  const user = req.locals.user;
 
   try {
     const existingNoteTags = await pool.query(
@@ -161,8 +160,15 @@ export const getNote = async (req: Request<{ id: string }>, res: Response) => {
 
     const note = noteQuery.rows[0];
 
-    const data = { ...note, tags };
-    res.status(200).json(data);
+    const formatData = {
+      id: note.id,
+      title: note.title,
+      description: note.description,
+      isArchived: note.is_archived,
+      updatedAt: note.updated_at,
+      tags,
+    };
+    res.status(200).json(formatData);
   } catch (error) {
     res.status(500).json({ error });
   }
@@ -236,6 +242,11 @@ export const getNotes = async (
         }
       });
       res.status(200).json(filteredData);
+      return;
+    }
+
+    if (searchValue === "") {
+      res.status(200).json(data);
       return;
     }
 

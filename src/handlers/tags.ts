@@ -10,7 +10,7 @@ export const validateTagData = async (
   const { tags } = req.body;
   const formattedTags = tags
     .filter((tag) => {
-      if (tag.name.trim() !== "") return tag;
+      if (tag && tag.name.trim() !== "") return tag;
     })
     .map((tag) => ({
       ...tag,
