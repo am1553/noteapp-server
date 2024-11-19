@@ -1,5 +1,5 @@
 import jwt, { JwtPayload } from "jsonwebtoken";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import { Response, Request, NextFunction } from "express";
 import { User } from "../types";
 export const comparePasswords = (
