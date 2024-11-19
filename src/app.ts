@@ -7,7 +7,11 @@ import { appRouter, authRouter } from "./router";
 
 const app: Express = express();
 const corsOptions = {
-  origin: ["http://localhost:3000", "http://localhost:5173"],
+  origin: [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "https://notesapp-react-akzo.onrender.com/*",
+  ],
   method: ["GET", "POST", "OPTIONS", "PUT", "PATCH", "DELETE"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,
