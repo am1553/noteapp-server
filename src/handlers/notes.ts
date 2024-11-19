@@ -81,7 +81,11 @@ export const createNoteTagJoin = async (
         return data.rows[0];
       })
     );
-    const existingTagNames = existingTags.map((tag) => tag.name);
+    const existingTagNames = existingTags.map((tag) => {
+      if (tag) {
+        return tag.name;
+      }
+    });
     const newJoins = data.tags.filter(
       (tag: Tag) => !existingTagNames.includes(tag.name)
     );
@@ -92,6 +96,7 @@ export const createNoteTagJoin = async (
         [noteID, tag.id]
       );
     });
+
     res.status(200).json(data);
     return;
   } catch (error) {
@@ -218,7 +223,7 @@ export const getNotes = async (
           isArchived: note.is_archived,
           updatedAt: note.updated_at,
         };
-        return { ...noteData, tags };
+        return { ...noteData, tags: tags.filter((tag) => tag) };
       })
     );
 

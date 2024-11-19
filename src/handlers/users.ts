@@ -42,6 +42,10 @@ export const createUser = async (
     const token: string = createToken(user);
     const refreshToken: string = createRefreshToken(user);
 
+    await pool.query("INSERT INTO settings (user_id) VALUES ($1) RETURNING *", [
+      user.id,
+    ]);
+
     const data = {
       token: { access: token, refresh: refreshToken },
       user: user,

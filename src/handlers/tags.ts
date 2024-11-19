@@ -8,11 +8,16 @@ export const validateTagData = async (
   next: NextFunction
 ) => {
   const { tags } = req.body;
-  const formattedTags = tags.map((tag) => ({
-    ...tag,
-    name: tag.name.toLowerCase().trim(),
-  }));
+  const formattedTags = tags
+    .filter((tag) => {
+      if (tag.name.trim() !== "") return tag;
+    })
+    .map((tag) => ({
+      ...tag,
+      name: tag.name.toLowerCase().trim(),
+    }));
 
+  console.log(formattedTags);
   req.body.tags = formattedTags;
   next();
 };
@@ -54,6 +59,7 @@ export const removeDuplicateTags = async (
         (t) => t.name.toLowerCase().trim() === tag.name.toLowerCase().trim()
       )
   );
+
   req.body.tags = filteredTags;
   next();
 };
@@ -76,6 +82,7 @@ export const createTags = async (
 ) => {
   const user = req.locals.user;
   const { tags } = req.body;
+
   try {
     await Promise.all(
       tags.map(async (tag: Tag) => {
@@ -93,5 +100,34 @@ export const createTags = async (
     next();
   } catch (error) {
     res.status(500).json(error);
+  }
+};
+
+export const deleteRemovedTags = async (
+  req: Request<{}, {}, Note & { tags: Tag[] }, {}>,
+  res: Response,
+  next: NextFunction
+) => {
+  const { tags, id: noteID } = req.body;
+  try {
+    const prevState = await pool.query(
+      "SELECT name, id FROM tags INNER JOIN note_tags ON tags.id = note_tags.tag_id WHERE note_id = $1",
+      [noteID]
+    );
+    const bodyTagNames = tags.map((tag) => tag.name);
+    const removedTags = prevState.rows.filter((row) => {
+      if (!bodyTagNames.includes(row.name)) return row;
+    });
+    await Promise.all(
+      removedTags.map(async (tag) => {
+        return await pool.query("DELETE FROM tags WHERE id = $1", [tag.id]);
+      })
+    );
+    next();
+    return;
+  } catch (error) {
+    console.log(error);
+    res.status(500).json(error);
+    return;
   }
 };
