@@ -25,6 +25,7 @@ export const createUser = async (
   next: NextFunction
 ): Promise<void> => {
   const { email, password, firstName, lastName } = req.body;
+  console.log(req.body);
   try {
     const isValidReq = (await userExists(email)).rows.length === 0;
     if (!isValidReq) {

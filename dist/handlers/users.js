@@ -21,6 +21,7 @@ const userExists = (email) => {
 exports.userExists = userExists;
 const createUser = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     const { email, password, firstName, lastName } = req.body;
+    console.log(req.body);
     try {
         const isValidReq = (yield (0, exports.userExists)(email)).rows.length === 0;
         if (!isValidReq) {
