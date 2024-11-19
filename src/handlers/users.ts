@@ -25,7 +25,7 @@ export const createUser = async (
   next: NextFunction
 ): Promise<void> => {
   const { email, password, firstName, lastName } = req.body;
-  console.log(req.body);
+
   try {
     const isValidReq = (await userExists(email)).rows.length === 0;
     if (!isValidReq) {
@@ -33,7 +33,7 @@ export const createUser = async (
     }
     const hashedPassword = await hashPassword(password);
     const userQuery = await pool.query(
-      "INSERT INTO users (email, password, first_name, last_name) VALUES($1, $2, $3, $4) RETURNING email, first_name, last_name",
+      "INSERT INTO users (email, password, first_name, last_name) VALUES($1, $2, $3, $4) RETURNING email, first_name, last_name, id",
       [email, hashedPassword, firstName, lastName]
     );
 
@@ -42,7 +42,7 @@ export const createUser = async (
       userQuery.rows[0];
     const token: string = createToken(user);
     const refreshToken: string = createRefreshToken(user);
-
+    console.log(user);
     await pool.query("INSERT INTO settings (user_id) VALUES ($1) RETURNING *", [
       user.id,
     ]);
@@ -52,6 +52,7 @@ export const createUser = async (
       user: user,
     };
     res.status(201).json(data);
+    return;
   } catch (error) {
     next(error);
   }
