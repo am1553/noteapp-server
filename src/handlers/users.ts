@@ -31,12 +31,16 @@ export const createUser = async (
     if (!isValidReq) {
       res.status(500).json({ message: "User already exists." });
     }
+    console.log("HASHING PASSWORD...");
     const hashedPassword = await hashPassword(password);
+
+    console.log("QUERYING DATABASE...");
     const userQuery = await pool.query(
       "INSERT INTO users (email, password, first_name, last_name) VALUES($1, $2, $3, $4) RETURNING email, first_name, last_name, id",
       [email, hashedPassword, firstName, lastName]
     );
 
+    console.log("USER CREATED: ", userQuery.rows[0]);
     const user: Omit<User, "firstName" | "lastName" | "email"> &
       Required<Pick<User, "firstName" | "lastName" | "email">> =
       userQuery.rows[0];

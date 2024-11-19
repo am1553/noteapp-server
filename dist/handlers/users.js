@@ -21,17 +21,20 @@ const userExists = (email) => {
 exports.userExists = userExists;
 const createUser = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     const { email, password, firstName, lastName } = req.body;
-    console.log(req.body);
     try {
         const isValidReq = (yield (0, exports.userExists)(email)).rows.length === 0;
         if (!isValidReq) {
             res.status(500).json({ message: "User already exists." });
         }
+        console.log("HASHING PASSWORD...");
         const hashedPassword = yield (0, auth_1.hashPassword)(password);
-        const userQuery = yield index_1.default.query("INSERT INTO users (email, password, first_name, last_name) VALUES($1, $2, $3, $4) RETURNING email, first_name, last_name", [email, hashedPassword, firstName, lastName]);
+        console.log("QUERYING DATABASE...");
+        const userQuery = yield index_1.default.query("INSERT INTO users (email, password, first_name, last_name) VALUES($1, $2, $3, $4) RETURNING email, first_name, last_name, id", [email, hashedPassword, firstName, lastName]);
+        console.log("USER CREATED: ", userQuery.rows[0]);
         const user = userQuery.rows[0];
         const token = (0, auth_1.createToken)(user);
         const refreshToken = (0, auth_1.createRefreshToken)(user);
+        console.log(user);
         yield index_1.default.query("INSERT INTO settings (user_id) VALUES ($1) RETURNING *", [
             user.id,
         ]);
@@ -40,6 +43,7 @@ const createUser = (req, res, next) => __awaiter(void 0, void 0, void 0, functio
             user: user,
         };
         res.status(201).json(data);
+        return;
     }
     catch (error) {
         next(error);
